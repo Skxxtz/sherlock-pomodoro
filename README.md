@@ -8,4 +8,4 @@ for socket messages to communicate with the Sherlock main process. Sherlock can
 <br>
 
 > [!WARNING]
-> This is a work in progress and **cannot**
+> This is a work in progress and **cannot** be used with Sherlock yet.
