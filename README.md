@@ -6,6 +6,6 @@ for socket messages to communicate with the Sherlock main process. Sherlock can
     then display the remaining time within the application.
 
 <br>
-> ⚠️ **Warning**
->
-> This is a work in progress and **cannot** be used with Sherlock yet.
+
+> [!WARNING]
+> This is a work in progress and **cannot**
