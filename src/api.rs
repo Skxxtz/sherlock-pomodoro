@@ -6,7 +6,7 @@ use crate::timer::PomodoroTimer;
 
 pub struct API {
     pub listener: Option<UnixListener>,
-    remaining: Option<Duration>,
+    remaining: Duration,
     start: Option<SystemTime>,
     timer: Option<PomodoroTimer>,
 }
@@ -17,7 +17,7 @@ impl API {
         Some(Self {
             listener: Some(listener),
             start: None,
-            remaining: None,
+            remaining: Duration::new(25 * 60, 0),
             timer: None,
         })
     }
@@ -47,23 +47,21 @@ impl API {
                 self.stop();
             }
             "remaining" => {
-                if let Some(remaining) = self.remaining {
-                    let rem = if let Some(start) = self.start {
-                        let since_start = SystemTime::now()
-                            .duration_since(start)
-                            .unwrap_or(Duration::new(0, 0));
-                        remaining.saturating_sub(since_start)
-                    } else {
-                        remaining
-                    };
-                    let mut buf = Vec::with_capacity(32);
-                    write!(buf, "{:?}", rem).ok()?;
-                    let _ = client.write(&buf);
-                }
+                let rem = if let Some(start) = self.start {
+                    let since_start = SystemTime::now()
+                        .duration_since(start)
+                        .unwrap_or(Duration::new(0, 0));
+                    self.remaining.saturating_sub(since_start)
+                } else {
+                    self.remaining
+                };
+                let mut buf = Vec::with_capacity(32);
+                write!(buf, "{:?}", rem).ok()?;
+                let _ = client.write(&buf);
             }
             "show" => {
                 let info = self.show_self();
-                let _ = client.write(info.as_bytes());
+                let _ = client.write_sized(info.as_bytes());
             }
             _ => {}
         };
@@ -74,27 +72,22 @@ impl API {
             return;
         }
 
-        let remaining = self
-            .remaining
-            .take()
-            .unwrap_or(Duration::from_secs(25 * 60));
-        let pomodoro = PomodoroTimer::new(remaining, || {
+        let pomodoro = PomodoroTimer::new(self.remaining, || {
             Self::on_complete();
         });
 
-        self.remaining = Some(remaining);
         self.timer = Some(pomodoro);
         self.start = Some(SystemTime::now());
     }
     fn stop(&mut self) {
         if let Some(pomodoro) = self.timer.take() {
             if let Some(start) = self.start.take() {
-                let target = Duration::from_secs(25 * 60);
+                let target = self.remaining;
                 let completed = SystemTime::now()
                     .duration_since(start)
                     .unwrap_or(Duration::from_secs(0));
                 let diff = target.saturating_sub(completed);
-                self.remaining = Some(diff);
+                self.remaining = diff;
                 pomodoro.cancel();
             }
         }
@@ -104,32 +97,47 @@ impl API {
             pomodoro.cancel();
         }
         self.start = None;
-        self.remaining = None;
+        self.remaining = Duration::new(25 * 60, 0);
     }
     fn on_complete() {
         println!("test");
     }
     fn show_self(&self) -> String {
-        let start_json = if let Some(s) = self.start {
-            s.duration_since(UNIX_EPOCH).unwrap().as_secs().to_string()
+        let end = if let Some(start) = self.start {
+            start
+                .checked_add(self.remaining)
+                .unwrap()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs()
+                .to_string()
         } else {
             "null".to_string()
         };
-
-        let remaining_json = if let Some(d) = self.remaining {
-            if let Some(start) = self.start {
-                let elapsed = SystemTime::now().duration_since(start).unwrap_or_default();
-                d.saturating_sub(elapsed).as_secs().to_string()
-            } else {
-                d.as_secs().to_string()
-            }
-        } else {
-            "null".to_string()
-        };
+        let rem = self.remaining.as_secs().to_string();
 
         format!(
-            r#"{{"start":{},"remaining":{}}}"#,
-            start_json, remaining_json
+            r#"{{"end":{}, "remaining": {}, "active": {}}}"#,
+            end,
+            rem,
+            self.timer.is_some()
         )
+    }
+}
+
+trait SizedMessage {
+    fn write_sized(&mut self, buf: &[u8]) -> Option<()>;
+}
+impl SizedMessage for UnixStream {
+    fn write_sized(&mut self, buf: &[u8]) -> Option<()> {
+        let buf_len = buf.len();
+        if buf_len > u32::MAX as usize {
+            // return error for size too big
+        }
+        let buf_len = buf_len as u32;
+        self.write_all(&buf_len.to_be_bytes()).ok()?;
+        self.write_all(buf).ok()?;
+
+        Some(())
     }
 }
