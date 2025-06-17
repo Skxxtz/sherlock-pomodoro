@@ -1,5 +1,6 @@
 use std::io::{Read, Write};
 use std::os::unix::net::{UnixListener, UnixStream};
+use std::sync::atomic::Ordering;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::timer::PomodoroTimer;
@@ -68,8 +69,10 @@ impl API {
         Some(())
     }
     fn start(&mut self) {
-        if self.timer.is_some() {
-            return;
+        if let Some(timer) = &self.timer {
+            if timer.is_active.load(Ordering::SeqCst){
+                return
+            }
         }
 
         let pomodoro = PomodoroTimer::new(self.remaining, || {
@@ -86,8 +89,13 @@ impl API {
                 let completed = SystemTime::now()
                     .duration_since(start)
                     .unwrap_or(Duration::from_secs(0));
-                let diff = target.saturating_sub(completed);
-                self.remaining = diff;
+
+                if completed.as_secs() == 0 {
+                    self.reset();
+                } else {
+                    let diff = target.saturating_sub(completed);
+                    self.remaining = diff;
+                }
                 pomodoro.cancel();
             }
         }
@@ -120,7 +128,7 @@ impl API {
             r#"{{"end":{}, "remaining": {}, "active": {}}}"#,
             end,
             rem,
-            self.timer.is_some()
+            self.timer.as_ref().map_or(false, |t| t.is_active.load(Ordering::SeqCst)),
         )
     }
 }
