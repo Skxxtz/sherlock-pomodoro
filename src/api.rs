@@ -70,8 +70,8 @@ impl API {
     }
     fn start(&mut self) {
         if let Some(timer) = &self.timer {
-            if timer.is_active.load(Ordering::SeqCst){
-                return
+            if timer.is_active.load(Ordering::SeqCst) {
+                return;
             }
         }
 
@@ -90,10 +90,11 @@ impl API {
                     .duration_since(start)
                     .unwrap_or(Duration::from_secs(0));
 
-                if completed.as_secs() == 0 {
+                let diff = target.saturating_sub(completed);
+
+                if diff.as_secs() == 0 {
                     self.reset();
                 } else {
-                    let diff = target.saturating_sub(completed);
                     self.remaining = diff;
                 }
                 pomodoro.cancel();
@@ -108,7 +109,11 @@ impl API {
         self.remaining = Duration::new(25 * 60, 0);
     }
     fn on_complete() {
-        println!("test");
+        let _ = std::process::Command::new("notify-send")
+            .arg("--icon=time")
+            .arg("Pomodoro Timer")
+            .arg("Timer completed!")
+            .spawn();
     }
     fn show_self(&self) -> String {
         let end = if let Some(start) = self.start {
@@ -128,7 +133,9 @@ impl API {
             r#"{{"end":{}, "remaining": {}, "active": {}}}"#,
             end,
             rem,
-            self.timer.as_ref().map_or(false, |t| t.is_active.load(Ordering::SeqCst)),
+            self.timer
+                .as_ref()
+                .map_or(false, |t| t.is_active.load(Ordering::SeqCst)),
         )
     }
 }
