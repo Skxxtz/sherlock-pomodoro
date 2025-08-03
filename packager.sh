@@ -4,6 +4,7 @@ read -p "Current version: " version
 rm -rf ~/.tmp/sherlock-pomodoro-release/
 mkdir -p ~/.tmp/sherlock-pomodoro-release/
 cargo build --release
+strip target/release/sherlock-pomodoro
 cp target/release/sherlock-pomodoro ~/.tmp/sherlock-pomodoro-release/
 cp LICENSE ~/.tmp/sherlock-pomodoro-release/LICENSE
 
