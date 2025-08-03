@@ -51,6 +51,7 @@ Make sure you have the following dependency installed:
     cd ~/Downloads/
     tar -xzf sherlock-pomodoro*.tar.gz
     ```
+
     You can use tab-completion or run `ls` to verify the name of the archive.
 
 3. **Install the binary**:
@@ -108,4 +109,3 @@ Make sure you have the following dependencies installed:
     You can use tab-completion or `ls target/debian/` to confirm the file name.
 
     (Make sure to replace the filename if the version number is different.)
-
